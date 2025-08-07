@@ -1,0 +1,111 @@
+[Dashboard]
+1. Connection Status Indicator
+Display: Show a real-time indicator (such as a green dot, text, or icon) reflecting the user's connection to the WebSocket server.
+Function: Changes state when the user is connected, trying to reconnect, or disconnected due to network/server issues.
+Implementation: Listen for socket events in your frontend and update a "connectionStatus" field in React/Redux state.
+
+2. List of Available Chat Rooms
+Display: Fetch and show all public (and private, if allowed) chat rooms from your backend (Express API or another dedicated endpoint).
+Features:
+Search and filter rooms by name or topic
+Show room metadata (name, description, number of participants)
+Implementation: Use an endpoint like GET /api/chatrooms and render results in the dashboard UI.
+
+3. Join a Chat Room
+Display: Provide a "Join" button next to every room.
+Features:
+On clicking, establish a real-time socket connection to that room.
+Show users currently in the room (“Members: 12”).
+After joining, redirect to the chat view for that room.
+Implementation:
+Call POST /api/chatrooms/:id/join (or open WebSocket connection with room info).
+Update Redux/UI state for active room.
+
+------------------
+1. Add a "Join" Button to Each Room
+Update your React room list to display a "Join" button next to every room:
+
+2. Implement handleJoinRoom Function
+You can either:
+(a) Call a REST endpoint like POST /api/chatrooms/:id/join (recommended for access control/record-keeping), or
+(b) Immediately open a WebSocket connection for that room, passing the room ID.
+
+3. Update UI/Redux State for Active Room
+Set the active room in your UI state or Redux slice.
+Example: dispatch({ type: 'SET_ACTIVE_ROOM', payload: roomId })
+When navigating to /chat/:roomId, load the chat view for that room.
+
+4. Chat View for a Specific Room
+When the user lands in /chat/:roomId,
+Open the WebSocket connection, including the joined room ID (e.g., as part of the payload or handshake).
+Fetch and display current room members (users currently in the room).
+Display previous chat history for that room (via API call).
+Render live chat messages and presence.
+
+5. Show Current Members in the Room
+Add a section in your chat view UI showing a list of users currently present, e.g.:
+Populate members by fetching from the backend (GET /api/chatrooms/:id/members) and/or by subscribing to real-time presence events via your pub/sub service.
+
+6. Redirect/Navigation After Joining
+After successfully joining the room (via REST or socket), navigate user to /chat/:roomId.
+------------------
+
+4. Create a New Chat Room
+Display: Add a button/form to let users create a new chat room.
+Features:
+Users provide room name, description, and optionally privacy (public/private).
+Show feedback for room creation success/failure.
+Redirect or auto-join on creation.
+Implementation: Make a POST /api/chatrooms call with new room details, then refresh the list or auto-select the new room.
+
+---------------------
+Key Steps to Move from Echo Server to Room Broadcast Server
+Track Connections and Rooms:
+Maintain a global (or shared) registry of active WebSocket connections grouped by room ID.
+When a user connects, associate their connection with the specified room ID.
+
+Broadcast Messages to Room Members:
+When a message is received from any user, parse it, enrich it with user info and timestamp
+Broadcast the message to every connected WebSocket client in that room (except optionally the sender).
+
+Handle Joining and Leaving Rooms:
+On connection open, register the user WebSocket in the correct room group.
+On connection close, clean up by removing the user from the room group.
+
+Add Basic Message Structure:
+Use JSON format messages with type, message, sender fields, so clients can parse messages consistently.
+
+Presence Updates (Optional):
+Notify room members when users join or leave (presence updates).
+---------------------
+
+
+5. Show User Presence & User List
+Display: Show a list of users currently online or in each room, with presence status (online/away/offline).
+Features:
+Presence indicators next to usernames (green/grey dots, etc.).
+Implementation:
+Use real-time updates (via your Go presence service and WebSocket events) to keep this list up-to-date.
+
+6. User Profile & Settings
+Display: Area for user avatar, name, email, with a link to view or edit profile information.
+Features:
+Option to edit profile info, upload an avatar, change password, etc.
+Implementation: Secure endpoints for profile update, form in React, optimistic UI updates.
+
+7. Notifications
+Display: Badge count and toast notifications for:
+New messages in rooms you’re in (but not viewing)
+New users joining/leaving a room
+Direct mentions, if implemented
+Implementation: Use Redux/React state to trigger visual cues, and optionally, the browser’s notification API.
+
+8. Logout
+Display: “Logout” button.
+Features:
+Ends the session, disconnects WebSocket, redirects to login page.
+Implementation: Clear auth tokens/session on frontend; call /api/logout if needed.
+
+9. Optional: Room Invitations / Private Rooms
+Features: Allow users to invite others to private rooms, via unique links or invite lists.
+Implementation: Extend backend and dashboard for invite flows.

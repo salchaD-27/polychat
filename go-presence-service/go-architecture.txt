@@ -1,0 +1,37 @@
+1. cmd/server/main.go
+This is the entry point of your presence service application.
+Set up your HTTP server and WebSocket routing here.
+Initialize dependencies like presence manager, store or broadcasting hub.
+Example: Start the HTTP server on a port, register the WS handler.
+
+2. internal/ws/handler.go
+WebSocket connection and upgrade HTTP requests to WS.
+Handle lifecycle of new WS connections:
+Accept connections,
+Register clients,
+Read incoming messages and dispatch events,
+Close connections.
+
+3. internal/ws/client.go
+Define client struct representing each connected WebSocket client.
+Methods for sending messages to client, receiving messages, and client state management.
+Often contains client read/write pumps for WS messages.
+
+4. internal/ws/presence.go
+Core logic to manage presence state tracking
+Track which users are online/away/offline,
+Manage rooms and clients assignment,
+Broadcast presence changes to all subscribed clients,
+Handle presence events and maintain consistent presence info.
+
+5. internal/models/models.go
+Definitions of common data models/structs shared by the service.
+Example models: User, PresenceUpdate, WebSocketMessage struct types.
+These structs can be used for marshaling/unmarshaling JSON WS messages.
+
+Recommended Next Steps
+Implement and test your WS handler first — ensure you can upgrade HTTP connections to WebSockets and accept client connections.
+Build the client management in client.go with goroutines for reading/writing messages.
+Develop the presence state logic — a central manager in presence.go that tracks users and broadcasts updates in real-time.
+Define clear message protocols in models.go to standardize WS messages like presence updates.
+Wire up your main.go to start the server and wire the WS handler.
