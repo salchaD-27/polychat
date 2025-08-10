@@ -1,4 +1,3 @@
-// internal/models/models.go
 package models
 
 import "time"

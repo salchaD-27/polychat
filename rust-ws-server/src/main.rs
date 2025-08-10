@@ -233,8 +233,14 @@
 //     }
 // }
 
+// multi-room WebSocket chat server using the Warp framework and Tokio for asynchronous runtime
+// It allows clients to connect to specific chat rooms, send messages, and receive real-time updates about presence (users joining and leaving) and chat messages within those rooms
 
+// Warp is a Rust web framework, focused on async HTTP and WebSocket APIs
+// A Filter picks apart HTTP requests and decides if/how to handle them.
 use warp::Filter;
+// These bring in convenient methods for working with async streams and sinks 
+// (like .next() and .send())—essential for handling messages over WebSockets.
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
@@ -247,10 +253,19 @@ type UserId = String;
 type RoomId = String;
 type Tx = UnboundedSender<Result<Message, warp::Error>>;
 
+// rooms: A mutex-protected hash map where keys are room IDs (String), and values are vectors of Tx (unbounded sender channels).
+// Each Tx is a sender half of a channel sending messages to an individual connected client in that room.
+// This state is shared among all connections via an Arc.
 struct ServerState {
     rooms: Mutex<HashMap<RoomId, Vec<Tx>>>,
 }
 
+// Main Setup
+// The server listens for WebSocket connections at the /ws route.
+// Each WebSocket connection must include query parameters, especially a roomId to specify the chat room.
+// On connection, the WebSocket is upgraded and the client is registered in the appropriate room.
+
+// async entry point of the app, powered by the tokio runtime—a requirement for async IO in Rust
 #[tokio::main]
 async fn main() {
     // Create shared state for all connections and rooms
@@ -277,6 +292,23 @@ fn with_state(state: Arc<ServerState>) -> impl Filter<Extract = (Arc<ServerState
     warp::any().map(move || state.clone())
 }
 
+
+// Client Connection Handling
+// Each new connection:
+// Extracts roomId from query parameters.
+// Assigns a unique user_id (using UUID).
+// Splits the WebSocket stream into sender and receiver parts.
+// Creates an unbounded channel (tx, rx) to communicate with the WebSocket sender task.
+// Spawns a Tokio task that forwards all messages from the channel (rx) to the client's WebSocket (user_ws_tx).
+// Registers the sender channel (tx) into the shared room list.
+// Broadcasts a presence update message to the room announcing the user's join.
+
+// Listens to incoming messages from the user:
+// For each text message received, broadcasts a structured chat message with sender info, unique message ID, content, and timestamp to the entire room.
+
+// On disconnect or error:
+// Removes the client from the room.
+// Broadcasts a presence update announcing the user's departure.
 async fn client_connected(ws: WebSocket, qs: HashMap<String, String>, state: Arc<ServerState>) {
     eprintln!("New WS connection with query params: {:?}", qs);
 
@@ -289,8 +321,7 @@ async fn client_connected(ws: WebSocket, qs: HashMap<String, String>, state: Arc
         }
     };
 
-    // *** Token validation removed ***
-    // Assign dummy user id
+    // without token validation, assigning dummy user id
     let user_id = format!("user-{}", uuid::Uuid::new_v4());
 
     eprintln!("Assigned user_id: {}", user_id);
@@ -366,6 +397,11 @@ async fn client_connected(ws: WebSocket, qs: HashMap<String, String>, state: Arc
     })).await;
 }
 
+// Broadcasting
+// Locks the server state.
+// Gets the list of clients (Tx senders) in the given room.
+// Serializes the message to a JSON string.
+// Sends the message text to each client’s channel.
 async fn broadcast_to_room(state: &Arc<ServerState>, room_id: &str, message: serde_json::Value) {
     let rooms = state.rooms.lock().unwrap();
     if let Some(clients) = rooms.get(room_id) {
@@ -375,3 +411,12 @@ async fn broadcast_to_room(state: &Arc<ServerState>, room_id: &str, message: ser
         }
     }
 }
+
+// Flow Example
+// A client connects to ws://server/ws?roomId=myroom.
+// The connection is upgraded to a WebSocket.
+// The server assigns a unique user ID, e.g., "user-550e8400-e29b-41d4-a716-446655440000".
+// The client is added to myroom’s list of clients.
+// A presence message "User user-... joined the room" is broadcasted to others in myroom.
+// When the client sends chat messages, each message is forwarded to all other clients in myroom with metadata (id, sender, timestamp).
+// When the client disconnects, the client is removed, and a presence message "User user-... left the room" is broadcast.
